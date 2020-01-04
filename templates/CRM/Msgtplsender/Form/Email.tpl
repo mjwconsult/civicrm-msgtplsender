@@ -100,12 +100,10 @@
       <div class="section">
         {$form.saveTemplate.html}&nbsp;{$form.saveTemplate.label}
       </div>
+      <div id="saveDetails" class="section" style="display: none;">
+        <div class="content">{$form.saveTemplateName.label} {$form.saveTemplateName.html|crmAddClass:huge}</div>
+      </div>
     </div>
-  </div>
-
-  <div id="saveDetails" class="section" style="display: none;">
-    <div class="label">{$form.saveTemplateName.label}</div>
-    <div class="content">{$form.saveTemplateName.html|crmAddClass:huge}</div>
   </div>
 
   {if ! $noAttach}
@@ -126,6 +124,19 @@
 {literal}
 CRM.$(function($) {
   var $form = $("form.{/literal}{$form.formClass}{literal}");
+
+  $('#updateTemplate', $form).change(function(e) {
+    if ($('#updateTemplate').prop('checked')) {
+      $('#saveTemplate').prop('checked', false);
+      $('#saveDetails').hide();
+    }
+  });
+
+  $('#saveTemplate', $form).change(function(e) {
+    if ($('#saveTemplate').prop('checked')) {
+      $('#updateTemplate').prop('checked', false);
+    }
+  });
 
   $('.add-cc-link', $form).click(function(e) {
     e.preventDefault();
