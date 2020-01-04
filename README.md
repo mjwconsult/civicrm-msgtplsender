@@ -15,8 +15,9 @@ See: https://docs.civicrm.org/sysadmin/en/latest/customize/extensions/#installin
 
 ## Usage
 
-https://example.org/civicrm/msgtplsender/email?cid=103&filtertpl=test%
+https://example.org/civicrm/msgtplsender/email?cid=103&filtertpl=test:%&destination=node/1
 
 Where:
 * cid: The contact ID of the contacty you are sending an email to (the "To" addresses will be pre-populated).
 * filtertpl: Filter the message templates that are shown (msg_title LIKE XX).
+* destination: A path internal to the site to redirect to after submit.

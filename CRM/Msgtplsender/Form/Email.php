@@ -78,6 +78,12 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
    * Build all the data structures needed to build the form.
    */
   public function preProcess() {
+    // Set redirect context
+    $destination = CRM_Utils_Request::retrieve('destination', 'String');
+    if (!empty($destination)) {
+      CRM_Core_Session::singleton()->replaceUserContext(CRM_Utils_System::url($destination, NULL, TRUE));
+    }
+
     // store case id if present
     $this->_caseId = CRM_Utils_Request::retrieve('caseid', 'String', $this, FALSE);
     $this->_context = CRM_Utils_Request::retrieve('context', 'Alphanumeric', $this);
@@ -238,12 +244,6 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
     if (!empty($bccValues)) {
       $bcc = implode(',', $bccValues['email']);
       $additionalDetails .= "\nbcc : " . implode(", ", $bccValues['details']);
-    }
-
-    // CRM-5916: prepend case id hash to CiviCase-originating emails’ subjects
-    if (isset($form->_caseId) && is_numeric($form->_caseId)) {
-      $hash = substr(sha1(CIVICRM_SITE_KEY . $form->_caseId), 0, 7);
-      $subject = "[case #$hash] $subject";
     }
 
     $attachments = array();
