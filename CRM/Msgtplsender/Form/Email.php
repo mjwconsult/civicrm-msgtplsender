@@ -157,17 +157,19 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
       $messageTemplateParams['msg_title'] = ['LIKE' => $filtertpl];
     }
     $templates = civicrm_api3('MessageTemplate', 'get', $messageTemplateParams)['values'];
+    $listOfTemplates = [];
     foreach ($templates as $templateID => $templateDetail) {
       $listOfTemplates[$templateID] = $templateDetail['msg_title'];
     }
 
     $this->assign('templates', TRUE);
     $this->removeElement('template');
-    $this->add('select', "template", ts('Use Template'),
-      ['' => ts('- select -')] + $listOfTemplates, FALSE,
-      ['onChange' => "selectValue( this.value, '');", 'class' => 'huge']
-    );
-
+    if (!empty($listOfTemplates)) {
+      $this->add('select', "template", ts('Use Template'),
+        ['' => ts('- select -')] + $listOfTemplates, FALSE,
+        ['onChange' => "selectValue( this.value, '');", 'class' => 'huge']
+      );
+    }
   }
 
   /**
