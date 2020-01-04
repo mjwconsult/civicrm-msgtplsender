@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<menu>
+  <item>
+    <path>civicrm/msgtplsender/email</path>
+    <page_callback>CRM_Msgtplsender_Form_Email</page_callback>
+    <title>Send Email</title>
+    <access_arguments>access CiviCRM</access_arguments>
+  </item>
+</menu>
