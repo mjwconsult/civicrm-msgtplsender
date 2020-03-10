@@ -75,6 +75,11 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
   public $_bccContactIds = [];
 
   /**
+   * @var array
+   */
+  public $_toContactEmails = [];
+
+  /**
    * Build all the data structures needed to build the form.
    */
   public function preProcess() {
@@ -93,7 +98,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
     // Allow request to specify email id rather than contact id
     $toEmailId = CRM_Utils_Request::retrieve('email_id', 'String', $this);
     if ($toEmailId) {
-      $toEmail = civicrm_api('email', 'getsingle', ['version' => 3, 'id' => $toEmailId]);
+      $toEmail = civicrm_api3('email', 'getsingle', ['id' => $toEmailId]);
       if (!empty($toEmail['email']) && !empty($toEmail['contact_id'])) {
         $this->_toEmail = $toEmail;
       }
@@ -136,7 +141,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
     $this->assign('suppressForm', FALSE);
     $this->assign('emailTask', TRUE);
 
-    CRM_Contact_Form_Task_EmailCommon::buildQuickForm($this);
+    self::emailCommonBuildQuickForm($this);
 
     $this->removeElement('to');
 
@@ -176,6 +181,241 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
         ['onChange' => "selectValue( this.value, '');", 'class' => 'huge']
       );
     }
+  }
+
+  /**
+   * Build the form object. Copied from CRM_Contact_Form_Task_EmailCommon::buildQuickForm()
+   * Only change is statusBounce -> setUFMessage
+   *
+   * @param \CRM_Msgtplsender_Form_Email $form
+   */
+  public static function emailCommonBuildQuickForm(&$form) {
+    $toArray = $ccArray = $bccArray = array();
+    $suppressedEmails = 0;
+    //here we are getting logged in user id as array but we need target contact id. CRM-5988
+    $cid = $form->get('cid');
+    if ($cid) {
+      $form->_contactIds = explode(',', $cid);
+    }
+    if (count($form->_contactIds) > 1) {
+      $form->_single = FALSE;
+    }
+    CRM_Contact_Form_Task_EmailCommon::bounceIfSimpleMailLimitExceeded(count($form->_contactIds));
+
+    $emailAttributes = array(
+      'class' => 'huge',
+    );
+    $to = $form->add('text', 'to', ts('To'), $emailAttributes, TRUE);
+    $cc = $form->add('text', 'cc_id', ts('CC'), $emailAttributes);
+    $bcc = $form->add('text', 'bcc_id', ts('BCC'), $emailAttributes);
+
+    $setDefaults = TRUE;
+    if (property_exists($form, '_context') && $form->_context == 'standalone') {
+      $setDefaults = FALSE;
+    }
+
+    $elements = array('to', 'cc', 'bcc');
+    $form->_allContactIds = $form->_toContactIds = $form->_contactIds;
+    foreach ($elements as $element) {
+      if ($$element->getValue()) {
+        $allEmails = explode(',', $$element->getValue());
+        if ($element == 'to') {
+          $form->_toContactIds = $form->_contactIds = array();
+        }
+
+        foreach ($allEmails as $value) {
+          list($contactId, $email) = explode('::', $value);
+          if ($contactId) {
+            switch ($element) {
+              case 'to':
+                $form->_contactIds[] = $form->_toContactIds[] = $contactId;
+                $form->_toContactEmails[] = $email;
+                break;
+
+              case 'cc':
+                $form->_ccContactIds[] = $contactId;
+                break;
+
+              case 'bcc':
+                $form->_bccContactIds[] = $contactId;
+                break;
+            }
+
+            $form->_allContactIds[] = $contactId;
+          }
+        }
+
+        $setDefaults = TRUE;
+      }
+    }
+
+    //get the group of contacts as per selected by user in case of Find Activities
+    if (!empty($form->_activityHolderIds)) {
+      $contact = $form->get('contacts');
+      $form->_allContactIds = $form->_contactIds = $contact;
+    }
+
+    // check if we need to setdefaults and check for valid contact emails / communication preferences
+    if (is_array($form->_allContactIds) && $setDefaults) {
+      $returnProperties = array(
+        'sort_name' => 1,
+        'email' => 1,
+        'do_not_email' => 1,
+        'is_deceased' => 1,
+        'on_hold' => 1,
+        'display_name' => 1,
+        'preferred_mail_format' => 1,
+      );
+
+      // get the details for all selected contacts ( to, cc and bcc contacts )
+      list($form->_contactDetails) = CRM_Utils_Token::getTokenDetails($form->_allContactIds,
+        $returnProperties,
+        FALSE,
+        FALSE
+      );
+
+      // make a copy of all contact details
+      $form->_allContactDetails = $form->_contactDetails;
+
+      // perform all validations on unique contact Ids
+      foreach (array_unique($form->_allContactIds) as $key => $contactId) {
+        $value = $form->_contactDetails[$contactId];
+        if ($value['do_not_email'] || empty($value['email']) || !empty($value['is_deceased']) || $value['on_hold']) {
+          $suppressedEmails++;
+
+          // unset contact details for contacts that we won't be sending email. This is prevent extra computation
+          // during token evaluation etc.
+          unset($form->_contactDetails[$contactId]);
+        }
+        else {
+          $email = $value['email'];
+
+          // build array's which are used to setdefaults
+          if (in_array($contactId, $form->_toContactIds)) {
+            $form->_toContactDetails[$contactId] = $form->_contactDetails[$contactId];
+            // If a particular address has been specified as the default, use that instead of contact's primary email
+            if (!empty($form->_toEmail) && $form->_toEmail['contact_id'] == $contactId) {
+              $email = $form->_toEmail['email'];
+            }
+            $toArray[] = array(
+              'text' => '"' . $value['sort_name'] . '" <' . $email . '>',
+              'id' => "$contactId::{$email}",
+            );
+          }
+          elseif (in_array($contactId, $form->_ccContactIds)) {
+            $ccArray[] = array(
+              'text' => '"' . $value['sort_name'] . '" <' . $email . '>',
+              'id' => "$contactId::{$email}",
+            );
+          }
+          elseif (in_array($contactId, $form->_bccContactIds)) {
+            $bccArray[] = array(
+              'text' => '"' . $value['sort_name'] . '" <' . $email . '>',
+              'id' => "$contactId::{$email}",
+            );
+          }
+        }
+      }
+
+      if (empty($toArray)) {
+        CRM_Utils_System::setUFMessage(ts('Selected contact(s) do not have a valid email address, or communication preferences specify DO NOT EMAIL, or they are deceased or Primary email address is On Hold.'));
+      }
+    }
+
+    $form->assign('toContact', json_encode($toArray));
+    $form->assign('ccContact', json_encode($ccArray));
+    $form->assign('bccContact', json_encode($bccArray));
+
+    $form->assign('suppressedEmails', $suppressedEmails);
+
+    $form->assign('totalSelectedContacts', count($form->_contactIds));
+
+    $form->add('text', 'subject', ts('Subject'), 'size=50 maxlength=254', TRUE);
+
+    $form->add('select', 'from_email_address', ts('From'), $form->_fromEmails, TRUE);
+
+    CRM_Mailing_BAO_Mailing::commonCompose($form);
+
+    // add attachments
+    CRM_Core_BAO_File::buildAttachment($form, NULL);
+
+    if ($form->_single) {
+      // also fix the user context stack
+      if ($form->_caseId) {
+        $ccid = CRM_Core_DAO::getFieldValue('CRM_Case_DAO_CaseContact', $form->_caseId,
+          'contact_id', 'case_id'
+        );
+        $url = CRM_Utils_System::url('civicrm/contact/view/case',
+          "&reset=1&action=view&cid={$ccid}&id={$form->_caseId}"
+        );
+      }
+      elseif ($form->_context) {
+        $url = CRM_Utils_System::url('civicrm/dashboard', 'reset=1');
+      }
+      else {
+        $url = CRM_Utils_System::url('civicrm/contact/view',
+          "&show=1&action=browse&cid={$form->_contactIds[0]}&selectedChild=activity"
+        );
+      }
+
+      $session = CRM_Core_Session::singleton();
+      $session->replaceUserContext($url);
+      $form->addDefaultButtons(ts('Send Email'), 'upload', 'cancel');
+    }
+    else {
+      $form->addDefaultButtons(ts('Send Email'), 'upload');
+    }
+
+    $fields = array(
+      'followup_assignee_contact_id' => array(
+        'type' => 'entityRef',
+        'label' => ts('Assigned to'),
+        'attributes' => array(
+          'multiple' => TRUE,
+          'create' => TRUE,
+          'api' => array('params' => array('is_deceased' => 0)),
+        ),
+      ),
+      'followup_activity_type_id' => array(
+        'type' => 'select',
+        'label' => ts('Followup Activity'),
+        'attributes' => array('' => '- ' . ts('select activity') . ' -') + CRM_Core_PseudoConstant::ActivityType(FALSE),
+        'extra' => array('class' => 'crm-select2'),
+      ),
+      'followup_activity_subject' => array(
+        'type' => 'text',
+        'label' => ts('Subject'),
+        'attributes' => CRM_Core_DAO::getAttribute('CRM_Activity_DAO_Activity',
+          'subject'
+        ),
+      ),
+    );
+
+    //add followup date
+    $form->add('datepicker', 'followup_date', ts('in'));
+
+    foreach ($fields as $field => $values) {
+      if (!empty($fields[$field])) {
+        $attribute = CRM_Utils_Array::value('attributes', $values);
+        $required = !empty($values['required']);
+
+        if ($values['type'] == 'select' && empty($attribute)) {
+          $form->addSelect($field, array('entity' => 'activity'), $required);
+        }
+        elseif ($values['type'] == 'entityRef') {
+          $form->addEntityRef($field, $values['label'], $attribute, $required);
+        }
+        else {
+          $form->add($values['type'], $field, $values['label'], $attribute, $required, CRM_Utils_Array::value('extra', $values));
+        }
+      }
+    }
+
+    //Added for CRM-15984: Add campaign field
+    CRM_Campaign_BAO_Campaign::addCampaign($form);
+
+    $form->addFormRule(array('CRM_Contact_Form_Task_EmailCommon', 'formRule'), $form);
+    CRM_Core_Resources::singleton()->addScriptFile('civicrm', 'templates/CRM/Contact/Form/Task/EmailCommon.js', 0, 'html-header');
   }
 
   /**
@@ -400,6 +640,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
    * List available tokens for this form.
    *
    * @return array
+   * @throws \CRM_Core_Exception
    */
   public function listTokens() {
     $tokens = CRM_Core_SelectValues::contactTokens();
