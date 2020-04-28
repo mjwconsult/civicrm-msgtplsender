@@ -6,8 +6,8 @@ The extension is licensed under [AGPL-3.0](LICENSE.txt).
 
 ## Requirements
 
-* PHP v7.1+
-* CiviCRM 5.19+
+* PHP v7.2+
+* CiviCRM 5.24+
 
 ## Installation
 
@@ -15,9 +15,9 @@ See: https://docs.civicrm.org/sysadmin/en/latest/customize/extensions/#installin
 
 ## Usage
 
-https://example.org/civicrm/msgtplsender/email?cid=103&filtertpl=test:%&destination=node/1
+https://example.org/civicrm/msgtplsender/email?cid=103&tplprefix=test&destination=node/1
 
 Where:
-* cid: The contact ID of the contacty you are sending an email to (the "To" addresses will be pre-populated).
-* filtertpl: Filter the message templates that are shown (msg_title LIKE XX).
-* destination: A path internal to the site to redirect to after submit.
+* `cid`: The contact ID of the contacty you are sending an email to (the "To" addresses will be pre-populated).
+* `tplprefix`: Filter the message templates that are shown (msg_title LIKE XX: ...). Also messagetemplates will be saved with this prefix if you save/update via the "Send Enail" form.
+* `destination`: A path internal to the site to redirect to after submit.
