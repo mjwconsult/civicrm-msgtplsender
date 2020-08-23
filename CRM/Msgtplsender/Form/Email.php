@@ -14,14 +14,7 @@
  */
 class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
 
-  /**
-   * Are we operating in "single mode".
-   *
-   * Single mode means sending email to one specific contact.
-   *
-   * @var bool
-   */
-  public $_single = TRUE;
+  use CRM_Contact_Form_Task_EmailTrait;
 
   /**
    * Are we operating in "single mode", i.e. sending email to one
@@ -87,6 +80,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
    * Build all the data structures needed to build the form.
    */
   public function preProcess() {
+    $this->_single = TRUE;
     // Set redirect context
     $destination = CRM_Utils_Request::retrieve('destination', 'String');
     if (!empty($destination)) {
@@ -139,8 +133,206 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
 
   /**
    * Build the form object.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function buildQuickFormFromEmailTrait528() {
+    // Suppress form might not be required but perhaps there was a risk some other  process had set it to TRUE.
+    $this->assign('suppressForm', FALSE);
+    $this->assign('emailTask', TRUE);
+
+    $toArray = [];
+    $suppressedEmails = 0;
+    //here we are getting logged in user id as array but we need target contact id. CRM-5988
+    $cid = $this->get('cid');
+    if ($cid) {
+      $this->_contactIds = explode(',', $cid);
+    }
+    if (count($this->_contactIds) > 1) {
+      $this->_single = FALSE;
+    }
+    $this->bounceIfSimpleMailLimitExceeded(count($this->_contactIds));
+
+    $emailAttributes = [
+      'class' => 'huge',
+    ];
+    $to = $this->add('text', 'to', ts('To'), $emailAttributes, TRUE);
+
+    $this->addEntityRef('cc_id', ts('CC'), [
+      'entity' => 'Email',
+      'multiple' => TRUE,
+    ]);
+
+    $this->addEntityRef('bcc_id', ts('BCC'), [
+      'entity' => 'Email',
+      'multiple' => TRUE,
+    ]);
+
+    if ($to->getValue()) {
+      $this->_toContactIds = $this->_contactIds = [];
+    }
+    $setDefaults = TRUE;
+    if (property_exists($this, '_context') && $this->_context === 'standalone') {
+      $setDefaults = FALSE;
+    }
+
+    $this->_allContactIds = $this->_toContactIds = $this->_contactIds;
+
+    if ($to->getValue()) {
+      foreach ($this->getEmails($to) as $value) {
+        $contactId = $value['contact_id'];
+        $email = $value['email'];
+        if ($contactId) {
+          $this->_contactIds[] = $this->_toContactIds[] = $contactId;
+          $this->_toContactEmails[] = $email;
+          $this->_allContactIds[] = $contactId;
+        }
+      }
+      $setDefaults = TRUE;
+    }
+
+    //get the group of contacts as per selected by user in case of Find Activities
+    if (!empty($this->_activityHolderIds)) {
+      $contact = $this->get('contacts');
+      $this->_allContactIds = $this->_contactIds = $contact;
+    }
+
+    // check if we need to setdefaults and check for valid contact emails / communication preferences
+    if (is_array($this->_allContactIds) && $setDefaults) {
+      // get the details for all selected contacts ( to, cc and bcc contacts )
+      $allContactDetails = civicrm_api3('Contact', 'get', [
+        'id' => ['IN' => $this->_allContactIds],
+        'return' => ['sort_name', 'email', 'do_not_email', 'is_deceased', 'on_hold', 'display_name', 'preferred_mail_format'],
+        'options' => ['limit' => 0],
+      ])['values'];
+
+      // The contact task supports passing in email_id in a url. It supports a single email
+      // and is marked as having been related to CiviHR.
+      // The array will look like $this->_toEmail = ['email' => 'x', 'contact_id' => 2])
+      // If it exists we want to use the specified email which might be different to the primary email
+      // that we have.
+      if (!empty($this->_toEmail['contact_id']) && !empty($allContactDetails[$this->_toEmail['contact_id']])) {
+        $allContactDetails[$this->_toEmail['contact_id']]['email'] = $this->_toEmail['email'];
+      }
+
+      // perform all validations on unique contact Ids
+      foreach ($allContactDetails as $contactId => $value) {
+        if ($value['do_not_email'] || empty($value['email']) || !empty($value['is_deceased']) || $value['on_hold']) {
+          $this->setSuppressedEmail($contactId, $value);
+        }
+        elseif (in_array($contactId, $this->_toContactIds)) {
+          $this->_toContactDetails[$contactId] = $this->_contactDetails[$contactId] = $value;
+          $toArray[] = [
+            'text' => '"' . $value['sort_name'] . '" <' . $value['email'] . '>',
+            'id' => "$contactId::{$value['email']}",
+          ];
+        }
+      }
+
+      if (empty($toArray)) {
+        CRM_Core_Error::statusBounce(ts('Selected contact(s) do not have a valid email address, or communication preferences specify DO NOT EMAIL, or they are deceased or Primary email address is On Hold.'));
+      }
+    }
+
+    $this->assign('toContact', json_encode($toArray));
+
+    $this->assign('suppressedEmails', count($this->suppressedEmails));
+
+    $this->assign('totalSelectedContacts', count($this->_contactIds));
+
+    $this->add('text', 'subject', ts('Subject'), 'size=50 maxlength=254', TRUE);
+
+    $this->add('select', 'from_email_address', ts('From'), $this->_fromEmails, TRUE);
+
+    CRM_Mailing_BAO_Mailing::commonCompose($this);
+
+    // add attachments
+    CRM_Core_BAO_File::buildAttachment($this, NULL);
+
+    if ($this->_single) {
+      // also fix the user context stack
+      if ($this->_caseId) {
+        $ccid = CRM_Core_DAO::getFieldValue('CRM_Case_DAO_CaseContact', $this->_caseId,
+          'contact_id', 'case_id'
+        );
+        $url = CRM_Utils_System::url('civicrm/contact/view/case',
+          "&reset=1&action=view&cid={$ccid}&id={$this->_caseId}"
+        );
+      }
+      elseif ($this->_context) {
+        $url = CRM_Utils_System::url('civicrm/dashboard', 'reset=1');
+      }
+      else {
+        $url = CRM_Utils_System::url('civicrm/contact/view',
+          "&show=1&action=browse&cid={$this->_contactIds[0]}&selectedChild=activity"
+        );
+      }
+
+      $session = CRM_Core_Session::singleton();
+      $session->replaceUserContext($url);
+      $this->addDefaultButtons(ts('Send Email'), 'upload', 'cancel');
+    }
+    else {
+      $this->addDefaultButtons(ts('Send Email'), 'upload');
+    }
+
+    $fields = [
+      'followup_assignee_contact_id' => [
+        'type' => 'entityRef',
+        'label' => ts('Assigned to'),
+        'attributes' => [
+          'multiple' => TRUE,
+          'create' => TRUE,
+          'api' => ['params' => ['is_deceased' => 0]],
+        ],
+      ],
+      'followup_activity_type_id' => [
+        'type' => 'select',
+        'label' => ts('Followup Activity'),
+        'attributes' => ['' => '- ' . ts('select activity') . ' -'] + CRM_Core_PseudoConstant::ActivityType(FALSE),
+        'extra' => ['class' => 'crm-select2'],
+      ],
+      'followup_activity_subject' => [
+        'type' => 'text',
+        'label' => ts('Subject'),
+        'attributes' => CRM_Core_DAO::getAttribute('CRM_Activity_DAO_Activity',
+          'subject'
+        ),
+      ],
+    ];
+
+    //add followup date
+    $this->add('datepicker', 'followup_date', ts('in'));
+
+    foreach ($fields as $field => $values) {
+      if (!empty($fields[$field])) {
+        $attribute = $values['attributes'] ?? NULL;
+        $required = !empty($values['required']);
+
+        if ($values['type'] === 'select' && empty($attribute)) {
+          $this->addSelect($field, ['entity' => 'activity'], $required);
+        }
+        elseif ($values['type'] === 'entityRef') {
+          $this->addEntityRef($field, $values['label'], $attribute, $required);
+        }
+        else {
+          $this->add($values['type'], $field, $values['label'], $attribute, $required, CRM_Utils_Array::value('extra', $values));
+        }
+      }
+    }
+
+    //Added for CRM-15984: Add campaign field
+    CRM_Campaign_BAO_Campaign::addCampaign($this);
+
+    $this->addFormRule(['CRM_Contact_Form_Task_EmailCommon', 'formRule'], $this);
+    CRM_Core_Resources::singleton()->addScriptFile('civicrm', 'templates/CRM/Contact/Form/Task/EmailCommon.js', 0, 'html-header');
+  }
+
+  /**
+   * Build the form object.
    */
   public function buildQuickForm() {
+    $this->buildQuickFormFromEmailTrait528();
     //enable form element
     $this->assign('suppressForm', FALSE);
     $this->assign('emailTask', TRUE);
@@ -153,7 +345,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
     foreach ($emails as $emailID => $emailDetail) {
       $this->listOfEmails[$emailID] = $emailDetail['email'];
     }
-    self::emailCommonBuildQuickForm($this);
+
     $this->tplPrefix = CRM_Utils_Request::retrieve('tplprefix', 'String', $this, FALSE);
     $this->removeElement('to');
     $this->add('select', 'to', ts('To'), $this->listOfEmails, TRUE, ['class' => 'huge']);
