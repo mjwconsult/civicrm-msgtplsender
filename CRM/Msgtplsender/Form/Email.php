@@ -133,6 +133,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
 
   /**
    * Build the form object.
+   * Copied from EmailTrait: Only change is statusBounce -> setUFMessage
    *
    * @throws \CRM_Core_Exception
    */
@@ -230,7 +231,9 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
       }
 
       if (empty($toArray)) {
-        CRM_Core_Error::statusBounce(ts('Selected contact(s) do not have a valid email address, or communication preferences specify DO NOT EMAIL, or they are deceased or Primary email address is On Hold.'));
+        $message = ts('Selected contact(s) do not have a valid email address, or communication preferences specify DO NOT EMAIL, or they are deceased or Primary email address is On Hold.');
+        CRM_Utils_System::setUFMessage($message);
+        CRM_Core_Error::statusBounce($message);
       }
     }
 
