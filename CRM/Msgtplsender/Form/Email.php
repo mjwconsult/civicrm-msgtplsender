@@ -728,8 +728,8 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
     list($sent, $activityId) = CRM_Activity_BAO_Activity::sendEmail(
       $formattedContactDetails,
       $subject,
-      $formValues['text_message'],
-      $formValues['html_message'],
+      $formValues['text_message'] ?? '',
+      $formValues['html_message'] ?? '',
       NULL,
       NULL,
       $from,
