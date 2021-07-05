@@ -14,11 +14,11 @@
     <url desc="Support">https://mjw.pt/support/msgtplsender</url>
     <url desc="Licensing">http://www.gnu.org/licenses/agpl-3.0.html</url>
   </urls>
-  <releaseDate>2020-08-23</releaseDate>
-  <version>0.4</version>
+  <releaseDate>2021-07-05</releaseDate>
+  <version>0.5</version>
   <develStage>beta</develStage>
   <compatibility>
-    <ver>5.28</ver>
+    <ver>5.39</ver>
   </compatibility>
   <classloader>
     <psr4 prefix="Civi\" path="Civi"/>

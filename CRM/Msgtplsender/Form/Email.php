@@ -453,12 +453,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
       ];
 
       // get the details for all selected contacts ( to, cc and bcc contacts )
-      list($form->_contactDetails) = CRM_Utils_Token::getTokenDetails($form->_allContactIds,
-        $returnProperties,
-        FALSE,
-        FALSE
-      );
-
+      list($form->_contactDetails) = CRM_Utils_Token::getTokenDetails($form->_allContactIds, $returnProperties, FALSE, FALSE);
       // make a copy of all contact details
       $form->_allContactDetails = $form->_contactDetails;
 
@@ -725,7 +720,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
     }
 
     // send the mail
-    list($sent, $activityId) = CRM_Activity_BAO_Activity::sendEmail(
+    list($sent, $activityIDs) = CRM_Activity_BAO_Activity::sendEmail(
       $formattedContactDetails,
       $subject,
       $formValues['text_message'] ?? '',
@@ -751,7 +746,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
         $params['followup_date'] = $formValues['followup_date'];
         $params['target_contact_id'] = $form->_contactIds;
         $params['followup_assignee_contact_id'] = explode(',', $formValues['followup_assignee_contact_id']);
-        $followupActivity = CRM_Activity_BAO_Activity::createFollowupActivity($activityId, $params);
+        $followupActivity = CRM_Activity_BAO_Activity::createFollowupActivity($activityIDs[0], $params);
         $followupStatus = ts('A followup activity has been scheduled.');
 
         if (Civi::settings()->get('activity_assignee_notification')) {
@@ -805,7 +800,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
       foreach ($cases as $key => $val) {
         if (is_numeric($val)) {
           $caseParams = [
-            'activity_id' => $activityId,
+            'activity_id' => $activityIDs[0],
             'case_id' => $val,
           ];
           CRM_Case_BAO_Case::processCaseActivity($caseParams);

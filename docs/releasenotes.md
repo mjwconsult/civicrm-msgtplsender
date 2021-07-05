@@ -1,5 +1,9 @@
 # Release Notes
 
+## Version 0.5
+
+* Compatibility with CiviCRM 5.39
+
 ## Version 0.4
 
 * Compatibility with CiviCRM 5.28
