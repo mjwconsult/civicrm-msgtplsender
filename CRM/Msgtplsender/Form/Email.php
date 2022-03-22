@@ -323,7 +323,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
     $formValues = $this->controller->exportValues($this->getName());
     $email = (string) civicrm_api3('Email', 'getvalue', ['id' => $formValues['to'], 'return' => 'email']);
     $formValues['to'] = $this->get('cid') . "::{$email}";
-    $this->submit($this, $formValues);
+    $this->submit($formValues);
   }
 
   /**
