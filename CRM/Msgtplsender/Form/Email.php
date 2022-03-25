@@ -29,6 +29,10 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
    */
   protected $listOfEmails = [];
 
+  public function getTableName() {
+    return 'civicrm_contact';
+  }
+
   /**
    * Build all the data structures needed to build the form.
    */
@@ -306,7 +310,45 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
     $formValues = $this->controller->exportValues($this->getName());
     $email = (string) civicrm_api3('Email', 'getvalue', ['id' => $formValues['to'], 'return' => 'email']);
     $formValues['to'] = $this->get('cid') . "::{$email}";
+    $this->_submitValues['to'] = $formValues['to'];
     $this->submit($formValues);
+  }
+
+  /**
+   * Get the emails from the added element.
+   * Copied from CRM_Contact_Form_Task_EmailTrait. Only difference is first line retrieval of "To".
+   *
+   * @return array
+   * @throws \API_Exception
+   */
+  protected function getEmails(): array {
+    // $allEmails = explode(',', $this->getSubmittedValue('to'));
+    $allEmails = explode(',', $this->_submitValues['to']);
+    $return = [];
+    $contactIDs = [];
+    foreach ($allEmails as $value) {
+      $values = explode('::', $value);
+      $return[$values[0]] = ['contact_id' => $values[0], 'email' => $values[1]];
+      $contactIDs[] = $values[0];
+    }
+    $this->suppressedEmails = [];
+    $suppressionDetails = Email::get(FALSE)
+      ->addWhere('contact_id', 'IN', $contactIDs)
+      ->addWhere('is_primary', '=', TRUE)
+      ->addSelect('email', 'contact_id', 'contact_id.is_deceased', 'on_hold', 'contact_id.do_not_email', 'contact_id.display_name')
+      ->execute();
+    foreach ($suppressionDetails as $details) {
+      if (empty($details['email']) || $details['contact_id.is_deceased'] || $details['contact_id.do_not_email'] || $details['on_hold']) {
+        $this->setSuppressedEmail($details['contact_id'], [
+          'on_hold' => $details['on_hold'],
+          'is_deceased' => $details['contact_id.is_deceased'],
+          'email' => $details['email'],
+          'display_name' => $details['contact_id.display_name'],
+        ]);
+        unset($return[$details['contact_id']]);
+      }
+    }
+    return $return;
   }
 
   /**
