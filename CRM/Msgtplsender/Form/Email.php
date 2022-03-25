@@ -9,6 +9,9 @@
  +--------------------------------------------------------------------+
  */
 
+use Civi\Api4\Email;
+use Civi\Api4\MessageTemplate;
+
 /**
  * This class provides the functionality to email a group of contacts.
  */
@@ -137,7 +140,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
     }
 
     // check if we need to setdefaults and check for valid contact emails / communication preferences
-    if (is_array($this->_allContactIds) && $setDefaults) {
+    if (!empty($this->_allContactIds) && $setDefaults) {
       // get the details for all selected contacts ( to, cc and bcc contacts )
       $allContactDetails = civicrm_api3('Contact', 'get', [
         'id' => ['IN' => $this->_allContactIds],
@@ -193,7 +196,6 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
 
     if ($this->_single) {
       CRM_Core_Session::singleton()->replaceUserContext($this->getRedirectUrl());
-
     }
     $this->addDefaultButtons(ts('Send Email'), 'upload', 'cancel');
 
@@ -256,63 +258,44 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
   public function buildQuickForm() {
     $this->buildQuickFormFromEmailTrait547();
 
-    $emails = civicrm_api3('Email', 'get', [
-      'contact_id' => $this->get('cid'),
-      'options' => [
-        'sort' => "is_primary DESC",
-        'limit' => 0
-      ],
-    ])['values'];
+    // Replace the "To" text field with a select field containing all email addresses for the contact.
+    $emails = Email::get(FALSE)
+      ->addWhere('contact_id', '=', $this->get('cid'))
+      ->addOrderBy('is_primary', 'DESC')
+      ->execute()
+      ->indexBy('id');
     $this->listOfEmails = [];
     foreach ($emails as $emailID => $emailDetail) {
       $this->listOfEmails[$emailID] = $emailDetail['email'];
     }
 
-    $this->tplPrefix = CRM_Utils_Request::retrieve('tplprefix', 'String', $this, FALSE);
+    // Previously added in EmailTrait::buildQuickForm as a text field.
+    // We remove and re-add here as a select field containing email addresses for the contact
     $this->removeElement('to');
     $this->add('select', 'to', ts('To'), $this->listOfEmails, TRUE, ['class' => 'huge']);
 
-    $messageTemplateParams = [
-      'workflow_id' => ['IS NULL' => 1],
-      'is_sms' => 0,
-      'options' => [
-        'sort' => "msg_title ASC",
-        'limit' => 0
-      ],
-    ];
+    // Add a filtered select list to replace the standard select template field
+    $messageTemplates = MessageTemplate::get(FALSE)
+      ->addWhere('workflow_name', 'IS NULL')
+      ->addWhere('is_sms', '=', FALSE)
+      ->addWhere('is_active', '=', TRUE)
+      ->addOrderBy('msg_title', 'ASC');
+    $this->tplPrefix = CRM_Utils_Request::retrieveValue('tplprefix', 'String');
     if (!empty($this->tplPrefix)) {
-      $messageTemplateParams['msg_title'] = ['LIKE' => "{$this->tplPrefix}:%"];
+      $messageTemplates->addWhere('msg_title', 'LIKE', 'Email:%');
     }
-    $templates = civicrm_api3('MessageTemplate', 'get', $messageTemplateParams)['values'];
+    $templates = $messageTemplates->execute()->indexBy('id');
     $listOfTemplates = [];
     foreach ($templates as $templateID => $templateDetail) {
       $listOfTemplates[$templateID] = $templateDetail['msg_title'];
     }
 
-    $this->assign('templates', TRUE);
+    // Previously added via CRM_Mailing_BAO_Mailing::commonCompose()
     $this->removeElement('template');
-    $this->add('select', "template", ts('Use Template'),
+    $this->add('select', 'template', ts('Use Template'),
       ['' => ts('- select -')] + $listOfTemplates, FALSE,
       ['onChange' => "selectValue( this.value, '');", 'class' => 'huge']
     );
-  }
-
-  /**
-   * Get the emails from the added element.
-   *
-   * @param HTML_QuickForm_Element $element
-   *
-   * @return array
-   * @throws \CiviCRM_API3_Exception
-   */
-  protected static function getEmails($element): array {
-    $selectedEmail = $element->getValue();
-    $return = [];
-    if (!empty($selectedEmail)) {
-      $email = civicrm_api3('Email', 'getsingle', ['id' => $selectedEmail, 'return' => ['contact_id', 'email']]);
-      $return[] = ['contact_id' => $email['contact_id'], 'email' => $email['email']];
-    }
-    return $return;
   }
 
   /**
