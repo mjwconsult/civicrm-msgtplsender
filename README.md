@@ -16,3 +16,9 @@ Where:
 * `cid`: The contact ID of the contact you are sending an email to (the "To" addresses will be pre-populated).
 * `tplprefix`: Filter the message templates that are shown (msg_title LIKE XX: ...). Also messagetemplates will be saved with this prefix if you save/update via the "Send Enail" form.
 * `destination`: A path internal to the site to redirect to after submit.
+
+## Release Notes
+
+### 1.1 (2022-06-09)
+
+* Make form a frontend form.

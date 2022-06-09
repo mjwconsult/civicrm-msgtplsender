@@ -21,15 +21,6 @@ function msgtplsender_civicrm_config(&$config) {
 }
 
 /**
- * Implements hook_civicrm_xmlMenu().
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_xmlMenu
- */
-function msgtplsender_civicrm_xmlMenu(&$files) {
-  _msgtplsender_civix_civicrm_xmlMenu($files);
-}
-
-/**
  * Implements hook_civicrm_install().
  *
  * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_install
@@ -84,22 +75,10 @@ function msgtplsender_civicrm_upgrade($op, CRM_Queue_Queue $queue = NULL) {
 }
 
 /**
- * Implements hook_civicrm_managed().
+ * Implements hook_civicrm_entityTypes().
  *
- * Generate a list of entities to create/deactivate/delete when this module
- * is installed, disabled, uninstalled.
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_managed
+ * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_entityTypes
  */
-function msgtplsender_civicrm_managed(&$entities) {
-  _msgtplsender_civix_civicrm_managed($entities);
-}
-
-/**
- * Implements hook_civicrm_alterSettingsFolders().
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_alterSettingsFolders
- */
-function msgtplsender_civicrm_alterSettingsFolders(&$metaDataFolders = NULL) {
-  _msgtplsender_civix_civicrm_alterSettingsFolders($metaDataFolders);
+function msgtplsender_civicrm_entityTypes(&$entityTypes) {
+  _msgtplsender_civix_civicrm_entityTypes($entityTypes);
 }
