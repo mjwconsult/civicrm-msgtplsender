@@ -5,5 +5,6 @@
     <page_callback>CRM_Msgtplsender_Form_Email</page_callback>
     <title>Send Email</title>
     <access_arguments>access CiviCRM</access_arguments>
+    <is_public>true</is_public>
   </item>
 </menu>
