@@ -39,21 +39,24 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
   public function preProcess() {
     $this->_single = TRUE;
     // Set redirect context
-    $destination = CRM_Utils_Request::retrieve('destination', 'String');
+    $destination = CRM_Utils_Request::retrieveValue('destination', 'String');
     if (!empty($destination)) {
       CRM_Core_Session::singleton()->replaceUserContext(CRM_Utils_System::url($destination, NULL, TRUE));
     }
 
     // store case id if present
-    $this->_caseId = CRM_Utils_Request::retrieve('caseid', 'String', $this, FALSE);
-    $this->_context = CRM_Utils_Request::retrieve('context', 'Alphanumeric', $this);
+    $this->_caseId = CRM_Utils_Request::retrieveValue('caseid', 'String');
+    $this->_context = CRM_Utils_Request::retrieveValue('context', 'Alphanumeric');
 
-    $cid = CRM_Utils_Request::retrieve('cid', 'String', $this, FALSE);
+    $cid = CRM_Utils_Request::retrieveValue('cid', 'String');
 
     // Allow request to specify email id rather than contact id
-    $toEmailId = CRM_Utils_Request::retrieve('email_id', 'String', $this);
+    $toEmailId = CRM_Utils_Request::retrieveValue('email_id', 'String');
     if ($toEmailId) {
-      $toEmail = civicrm_api3('email', 'getsingle', ['id' => $toEmailId]);
+      $toEmail = Email::get(FALSE)
+        ->addWhere('id', '=', $toEmailId)
+        ->execute()
+        ->first();
       if (!empty($toEmail['email']) && !empty($toEmail['contact_id'])) {
         $this->_toEmail = $toEmail;
       }
@@ -93,7 +96,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
    *
    * @throws \CRM_Core_Exception
    */
-  public function buildQuickFormFromEmailTrait547() {
+  public function buildQuickFormFromEmailTrait559() {
     // Suppress form might not be required but perhaps there was a risk some other  process had set it to TRUE.
     $this->assign('suppressForm', FALSE);
     $this->assign('emailTask', TRUE);
@@ -176,7 +179,6 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
       }
 
       if (empty($toArray)) {
-        // Modified in msgtplsender so UF gets message as well
         $message = ts('Selected contact(s) do not have a valid email address, or communication preferences specify DO NOT EMAIL, or they are deceased or Primary email address is On Hold.');
         CRM_Utils_System::setUFMessage($message);
         CRM_Core_Error::statusBounce($message);
@@ -191,7 +193,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
 
     $this->add('text', 'subject', ts('Subject'), ['size' => 50, 'maxlength' => 254], TRUE);
 
-    $this->add('select', 'from_email_address', ts('From'), $this->getFromEmails(), TRUE);
+    $this->add('select', 'from_email_address', ts('From'), $this->getFromEmails(), TRUE, ['class' => 'crm-select2 huge']);
 
     CRM_Mailing_BAO_Mailing::commonCompose($this);
 
@@ -260,7 +262,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
    * Build the form object.
    */
   public function buildQuickForm() {
-    $this->buildQuickFormFromEmailTrait547();
+    $this->buildQuickFormFromEmailTrait559();
 
     // Replace the "To" text field with a select field containing all email addresses for the contact.
     $emails = Email::get(FALSE)
@@ -308,7 +310,11 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
    */
   public function postProcess() {
     $formValues = $this->controller->exportValues($this->getName());
-    $email = (string) civicrm_api3('Email', 'getvalue', ['id' => $formValues['to'], 'return' => 'email']);
+    $email = Email::get(FALSE)
+      ->addSelect('email')
+      ->addWhere('id', '=', $formValues['to'])
+      ->execute()
+      ->first()['email'] ?? '';
     $formValues['to'] = $this->get('cid') . "::{$email}";
     $this->_submitValues['to'] = $formValues['to'];
     $this->submit($formValues);
@@ -322,7 +328,6 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
    * @throws \API_Exception
    */
   protected function getEmails(): array {
-    // $allEmails = explode(',', $this->getSubmittedValue('to'));
     $allEmails = explode(',', $this->_submitValues['to']);
     $return = [];
     $contactIDs = [];
@@ -386,7 +391,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
       $cc,
       $bcc,
       $additionalDetails,
-      CRM_Utils_Array::value('campaign_id', $formValues),
+      $formValues['campaign_id'] ?? NULL,
       $this->getCaseID()
     );
 

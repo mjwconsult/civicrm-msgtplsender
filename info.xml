@@ -21,11 +21,12 @@
     <ver>5.49</ver>
   </compatibility>
   <classloader>
+    <psr0 prefix="CRM_" path="."/>
     <psr4 prefix="Civi\" path="Civi"/>
   </classloader>
   <civix>
     <namespace>CRM/Msgtplsender</namespace>
-    <format>22.05.2</format>
+    <format>22.10.0</format>
   </civix>
   <mixins>
     <mixin>menu-xml@1.0.0</mixin>
