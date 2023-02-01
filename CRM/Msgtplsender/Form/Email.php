@@ -20,6 +20,11 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
   use CRM_Contact_Form_Task_EmailTrait;
 
   /**
+   * @var bool
+   */
+  public $submitOnce = TRUE;
+
+  /**
    * @var string The prefix for a message template (eg. "Email") will look for all messagetemplates with name "Email:.."
    */
   protected $tplPrefix = '';
@@ -38,6 +43,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
    */
   public function preProcess() {
     $this->_single = TRUE;
+
     // Set redirect context
     $destination = CRM_Utils_Request::retrieveValue('destination', 'String');
     if (!empty($destination)) {
@@ -46,47 +52,23 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
 
     // store case id if present
     $this->_caseId = CRM_Utils_Request::retrieveValue('caseid', 'String');
-    $this->_context = CRM_Utils_Request::retrieveValue('context', 'Alphanumeric');
-
     $cid = CRM_Utils_Request::retrieveValue('cid', 'String');
 
-    // Allow request to specify email id rather than contact id
-    $toEmailId = CRM_Utils_Request::retrieveValue('email_id', 'String');
-    if ($toEmailId) {
-      $toEmail = Email::get(FALSE)
-        ->addWhere('id', '=', $toEmailId)
-        ->execute()
-        ->first();
-      if (!empty($toEmail['email']) && !empty($toEmail['contact_id'])) {
-        $this->_toEmail = $toEmail;
-      }
-      if (!$cid) {
-        $cid = $toEmail['contact_id'];
-        $this->set('cid', $cid);
-      }
-    }
-
     if ($cid) {
+      $this->set('cid', $cid);
+
       $cid = explode(',', $cid);
       $displayName = [];
 
       foreach ($cid as $val) {
         $displayName[] = CRM_Contact_BAO_Contact::displayName($val);
       }
+    }
 
-      $this->setTitle(implode(',', $displayName) . ' - ' . ts('Email'));
-    }
-    else {
-      $this->setTitle(ts('New Email'));
-    }
+    $this->setTitle(implode(',', $displayName) . ' - ' . ts('Email'));
     CRM_Contact_Form_Task_EmailCommon::preProcessFromAddress($this);
 
-    if ($cid || $this->_context === 'standalone') {
-      // When search context is false the parent pre-process is not set. That avoids it changing the
-      // redirect url & attempting to set the search params of the form. It may have only
-      // historical significance.
-      $this->setIsSearchContext(FALSE);
-    }
+    $this->setIsSearchContext(FALSE);
     $this->traitPreProcess();
   }
 
@@ -318,104 +300,6 @@ class CRM_Msgtplsender_Form_Email extends CRM_Contact_Form_Task {
     $formValues['to'] = $this->get('cid') . "::{$email}";
     $this->_submitValues['to'] = $formValues['to'];
     $this->submit($formValues);
-  }
-
-  /**
-   * Get the emails from the added element.
-   * Copied from CRM_Contact_Form_Task_EmailTrait. Only difference is first line retrieval of "To".
-   *
-   * @return array
-   * @throws \API_Exception
-   */
-  protected function getEmails(): array {
-    $allEmails = explode(',', $this->_submitValues['to']);
-    $return = [];
-    $contactIDs = [];
-    foreach ($allEmails as $value) {
-      $values = explode('::', $value);
-      $return[$values[0]] = ['contact_id' => $values[0], 'email' => $values[1]];
-      $contactIDs[] = $values[0];
-    }
-    $this->suppressedEmails = [];
-    $suppressionDetails = Email::get(FALSE)
-      ->addWhere('contact_id', 'IN', $contactIDs)
-      ->addWhere('is_primary', '=', TRUE)
-      ->addSelect('email', 'contact_id', 'contact_id.is_deceased', 'on_hold', 'contact_id.do_not_email', 'contact_id.display_name')
-      ->execute();
-    foreach ($suppressionDetails as $details) {
-      if (empty($details['email']) || $details['contact_id.is_deceased'] || $details['contact_id.do_not_email'] || $details['on_hold']) {
-        $this->setSuppressedEmail($details['contact_id'], [
-          'on_hold' => $details['on_hold'],
-          'is_deceased' => $details['contact_id.is_deceased'],
-          'email' => $details['email'],
-          'display_name' => $details['contact_id.display_name'],
-        ]);
-        unset($return[$details['contact_id']]);
-      }
-    }
-    return $return;
-  }
-
-  /**
-   * Submit the form values.
-   *
-   * This is also accessible for testing.
-   *
-   * @param array $formValues
-   *
-   * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
-   * @throws \Civi\API\Exception\UnauthorizedException
-   * @throws \API_Exception
-   */
-  public function submit($formValues): void {
-    $this->saveMessageTemplate($formValues);
-    $from = $formValues['from_email_address'];
-    // dev/core#357 User Emails are keyed by their id so that the Signature is able to be added
-    // If we have had a contact email used here the value returned from the line above will be the
-    // numerical key where as $from for use in the sendEmail in Activity needs to be of format of "To Name" <toemailaddress>
-    $from = CRM_Utils_Mail::formatFromAddress($from);
-
-    $cc = $this->getCc();
-    $additionalDetails = empty($cc) ? '' : "\ncc : " . $this->getEmailUrlString($this->getCcArray());
-
-    $bcc = $this->getBcc();
-    $additionalDetails .= empty($bcc) ? '' : "\nbcc : " . $this->getEmailUrlString($this->getBccArray());
-
-    // send the mail
-    [$sent, $activityIds] = $this->sendEmail(
-      $this->getSubmittedValue('text_message'),
-      $this->getSubmittedValue('html_message'),
-      $from,
-      $this->getAttachments($formValues),
-      $cc,
-      $bcc,
-      $additionalDetails,
-      $formValues['campaign_id'] ?? NULL,
-      $this->getCaseID()
-    );
-
-    if ($sent) {
-      // Only use the first activity id if there's multiple.
-      // If there's multiple recipients the idea behind multiple activities
-      // is to record the token value replacements separately, but that
-      // has no meaning for followup activities, and this doesn't prevent
-      // creating more manually if desired.
-      $followupStatus = $this->createFollowUpActivities($formValues, $activityIds[0]);
-
-      CRM_Core_Session::setStatus(ts('One message was sent successfully. ', [
-          'plural' => '%count messages were sent successfully. ',
-          'count' => $sent,
-        ]) . $followupStatus, ts('Message Sent', ['plural' => 'Messages Sent', 'count' => $sent]), 'success');
-    }
-
-    if (!empty($this->suppressedEmails)) {
-      $status = '(' . ts('because no email address on file or communication preferences specify DO NOT EMAIL or Contact is deceased or Primary email address is On Hold') . ')<ul><li>' . implode('</li><li>', $this->suppressedEmails) . '</li></ul>';
-      CRM_Core_Session::setStatus($status, ts('One Message Not Sent', [
-        'count' => count($this->suppressedEmails),
-        'plural' => '%count Messages Not Sent',
-      ]), 'info');
-    }
   }
 
 }
