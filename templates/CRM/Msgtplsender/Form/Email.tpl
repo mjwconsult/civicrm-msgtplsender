@@ -63,8 +63,6 @@
          {help id="id-token-subject" tplFile=$tplFile isAdmin=$isAdmin file="CRM/Contact/Form/Task/Email.hlp"}
        </td>
     </tr>
-  {* CRM-15984 --add campaign to email activities *}
-  {include file="CRM/Campaign/Form/addCampaignToComponent.tpl" campaignTrClass="crm-contactEmail-form-block-campaign_id"}
 </table>
 
   <div class="crm-accordion-wrapper crm-html_email-accordion ">
@@ -79,9 +77,6 @@
       </div>
       <div class="clear"></div>
       <div class='html'>
-        {if $editor EQ 'textarea'}
-          <div class="help description">{ts}NOTE: If you are composing HTML-formatted messages, you may want to enable a Rich Text (WYSIWYG) editor (Administer &raquo; Customize Data & Screens &raquo; Display Preferences).{/ts}</div>
-        {/if}
         {$form.html_message.html}<br />
       </div>
     </div><!-- /.crm-accordion-body -->
@@ -105,9 +100,7 @@
     </div>
   </div>
 
-  {if ! $noAttach}
-    {include file="CRM/Form/attachment.tpl"}
-  {/if}
+  {include file="CRM/Form/attachment.tpl"}
 
   {include file="CRM/Mailing/Form/InsertTokens.tpl"}
 
@@ -174,9 +167,9 @@ CRM.$(function($) {
   }
 
   {/literal}
-  var toContact = {if $toContact}{$toContact}{else}''{/if},
-    ccContact = {if $ccContact}{$ccContact}{else}''{/if},
-    bccContact = {if $bccContact}{$bccContact}{else}''{/if};
+  var toContact = {if $toContact}{$toContact}{else}''{/if};
+  var ccContact = '';
+  var bccContact = '';
   {literal}
   //emailSelect('#to', toContact);
   emailSelect('#cc_id', ccContact);
