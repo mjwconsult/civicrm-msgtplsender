@@ -89,7 +89,6 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
    * @throws \CRM_Core_Exception
    */
   public static function preProcessFromAddress(&$form, $bounce = TRUE) {
-    $form->_emails = [];
     $form->_contactIds = [CRM_Core_Session::getLoggedInContactID()];
 
     $fromEmailValues = CRM_Core_BAO_Email::getFromEmail();
@@ -100,7 +99,6 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
       }
     }
 
-    $form->_emails = $fromEmailValues;
     $defaults = [];
     $form->_fromEmails = $fromEmailValues;
     if (is_numeric(key($form->_fromEmails))) {
@@ -760,7 +758,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
     // To comes in as an ID. We need it as a string
     $email = Email::get(FALSE)
       ->addSelect('email')
-      ->addWhere('id', '=', $this->getContactIDs()[0])
+      ->addWhere('contact_id', '=', $this->getContactIDs()[0])
       ->execute()
       ->first()['email'] ?? '';
     $allEmails = [$this->getContactIDs()[0] . "::{$email}"];

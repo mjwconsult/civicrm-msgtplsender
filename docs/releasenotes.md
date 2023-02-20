@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.2.1
+
+* Refactor and compatibility with CiviCRM 5.58.1
+
 ## Version 0.5
 
 * Compatibility with CiviCRM 5.39
