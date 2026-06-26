@@ -566,6 +566,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
       $details = $html ? $html : $text;
       $details .= $additionalDetails;
     }
+  
 
     $activityParams = [
       'source_contact_id' => $sourceContactID,
@@ -584,14 +585,28 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
     $activityParams['subject'] = preg_replace('/\[case #([0-9a-h]{7})\] /', '', $activityParams['subject']);
 
     // add the attachments to activity params here
-    if ($attachments) {
-      // first process them
-      $activityParams = array_merge($activityParams, $attachments);
-    }
-
     $activity = civicrm_api3('Activity', 'create', $activityParams);
 
-    return $activity['id'];
+	// Process attachments separately now that the activity exists
+	if ($attachments) {
+  		foreach ($attachments as $attachKey => $attachValue) {
+    		if (str_starts_with($attachKey, 'attachFile_')) {
+      			CRM_Core_BAO_File::filePostProcess(
+        			$attachValue['location'],
+        			NULL,
+        			'civicrm_activity',
+        			$activity['id'],
+        			NULL,
+        			TRUE,
+        			$attachValue,
+        			$attachKey,
+        			$attachValue['type']
+      			);
+    		}
+  		}
+	}
+
+	return $activity['id'];
   }
 
   /**
