@@ -25,12 +25,12 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
   /**
    * @var string The prefix for a message template (eg. "Email") will look for all messagetemplates with name "Email:.."
    */
-  protected $tplPrefix = '';
+  protected string $tplPrefix = '';
 
   /**
    * @var array List of emails keyed by email ID that will be loaded into the "To" element
    */
-  protected $listOfEmails = [];
+  protected array $listOfEmails = [];
 
   /**
    * Contacts form whom emails could not be sent.
@@ -39,7 +39,9 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
    *
    * @var array
    */
-  protected $suppressedEmails = [];
+  protected array $suppressedEmails = [];
+
+  private array $_contactIds;
 
   public function getTableName() {
     return 'civicrm_contact';
@@ -56,8 +58,6 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
       $this->set('destination', $destination);
     }
 
-    // store case id if present
-    $this->_caseId = CRM_Utils_Request::retrieve('caseid', 'String', $this);
     $cid = CRM_Utils_Request::retrieve('cid', 'String', $this);
 
     if ($cid) {
@@ -83,13 +83,12 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
   /**
    * Pre Process Form Addresses to be used in Quickform
    *
-   * @param CRM_Core_Form $form
    * @param bool $bounce determine if we want to throw a status bounce.
    *
    * @throws \CRM_Core_Exception
    */
-  public static function preProcessFromAddress(&$form, $bounce = TRUE) {
-    $form->_contactIds = [CRM_Core_Session::getLoggedInContactID()];
+  public function preProcessFromAddress($bounce = TRUE) {
+    $this->_contactIds = [CRM_Core_Session::getLoggedInContactID()];
 
     $fromEmailValues = CRM_Core_BAO_Email::getFromEmail();
 
@@ -100,15 +99,14 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
     }
 
     $defaults = [];
-    $form->_fromEmails = $fromEmailValues;
-    if (is_numeric(key($form->_fromEmails))) {
-      $emailID = (int) key($form->_fromEmails);
+    if (is_numeric(key($fromEmailValues))) {
+      $emailID = (int) key($fromEmailValues);
       $defaults = CRM_Core_BAO_Email::getEmailSignatureDefaults($emailID);
     }
     if (!Civi::settings()->get('allow_mail_from_logged_in_contact')) {
       $defaults['from_email_address'] = CRM_Core_BAO_Domain::getFromEmail();
     }
-    $form->setDefaults($defaults);
+    $this->setDefaults($defaults);
   }
 
   /**
@@ -124,11 +122,6 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
     $cid = $this->get('cid');
     if ($cid) {
       $this->_contactIds = explode(',', $cid);
-    }
-    // The default in CRM_Core_Form_Task is null, but changing it there gives
-    // errors later.
-    if (is_null($this->_contactIds)) {
-      $this->_contactIds = [];
     }
 
     $emailAttributes = [
@@ -146,21 +139,19 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
       'multiple' => TRUE,
     ]);
 
-    $setDefaults = TRUE;
-
-    $this->_allContactIds = $this->_toContactIds = $this->_contactIds;
+    $_allContactIds = $_toContactIds = $this->_contactIds;
 
     //get the group of contacts as per selected by user in case of Find Activities
     if (!empty($this->_activityHolderIds)) {
       $contact = $this->get('contacts');
-      $this->_allContactIds = $this->_toContactIds = $this->_contactIds = $contact;
+      $_allContactIds = $_toContactIds = $this->_contactIds = $contact;
     }
 
     // check if we need to setdefaults and check for valid contact emails / communication preferences
-    if (!empty($this->_allContactIds) && $setDefaults) {
+    if (!empty($_allContactIds)) {
       // get the details for all selected contacts ( to, cc and bcc contacts )
       $allContactDetails = civicrm_api3('Contact', 'get', [
-        'id' => ['IN' => $this->_allContactIds],
+        'id' => ['IN' => $_allContactIds],
         'return' => ['sort_name', 'email', 'do_not_email', 'is_deceased', 'on_hold', 'display_name'],
         'options' => ['limit' => 0],
       ])['values'];
@@ -179,7 +170,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
         if ($value['do_not_email'] || empty($value['email']) || !empty($value['is_deceased']) || $value['on_hold']) {
           $this->setSuppressedEmail($contactId, $value);
         }
-        elseif (in_array($contactId, $this->_toContactIds)) {
+        elseif (in_array($contactId, $_toContactIds)) {
           $this->_toContactDetails[$contactId] = $this->_contactDetails[$contactId] = $value;
           $toArray[] = [
             'text' => '"' . $value['sort_name'] . '" <' . $value['email'] . '>',
@@ -216,7 +207,6 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
     $this->add('datepicker', 'followup_date', ts('in'));
 
     $this->addFormRule([__CLASS__, 'saveTemplateFormRule'], $this);
-    $this->addFormRule([__CLASS__, 'deprecatedTokensFormRule'], $this);
     CRM_Core_Resources::singleton()->addScriptFile('civicrm', 'templates/CRM/Contact/Form/Task/EmailCommon.js', 0, 'html-header');
 
     // Replace the "To" text field with a select field containing all email addresses for the contact.
@@ -674,7 +664,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
    *
    * This is called after the contacts have been retrieved so we don't need to re-retrieve.
    *
-   * @param array $emailIDs
+   * @param array $emails
    *
    * @return string
    *   e.g. <a href='{$contactURL}'>Bob Smith</a>'
@@ -707,13 +697,13 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
 
       if (!empty($formValues['saveTemplate'])) {
         $messageTemplate['msg_title'] = $formValues['saveTemplateName'];
-        CRM_Core_BAO_MessageTemplate::add($messageTemplate);
+        CRM_Core_BAO_MessageTemplate::writeRecord($messageTemplate);
       }
 
       if (!empty($formValues['template']) && !empty($formValues['updateTemplate'])) {
         $messageTemplate['id'] = $formValues['template'];
         unset($messageTemplate['msg_title']);
-        CRM_Core_BAO_MessageTemplate::add($messageTemplate);
+        CRM_Core_BAO_MessageTemplate::writeRecord($messageTemplate);
       }
     }
   }
@@ -739,7 +729,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
   /**
    * Get the string for the email IDs.
    *
-   * @param array $emailIDs
+   * @param array $emails
    *   Array of email IDs.
    *
    * @return string
@@ -812,7 +802,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
     if ($this->getSubmittedValue('cc_id')) {
       $ccStrings = explode(',', $this->getSubmittedValue('cc_id'));
       foreach ($ccStrings as $cc) {
-        list($_, $ccEmails[]) = explode('::', $cc);
+        [$_, $ccEmails[]] = explode('::', $cc);
       }
       return $ccEmails;
     }
@@ -826,7 +816,7 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
     if ($this->getSubmittedValue('bcc_id')) {
       $bccStrings = explode(',', $this->getSubmittedValue('bcc_id'));
       foreach ($bccStrings as $bcc) {
-        list($_, $bccEmails[]) = explode('::', $bcc);
+        [$_, $bccEmails[]] = explode('::', $bcc);
       }
       return $bccEmails;
     }
@@ -929,40 +919,6 @@ class CRM_Msgtplsender_Form_Email extends CRM_Core_Form {
       $errors['saveTemplateName'] = ts('Enter name to save message template');
     }
     return empty($errors) ? TRUE : $errors;
-  }
-
-  /**
-   * Prevent submission of deprecated tokens.
-   *
-   * Note this rule can be removed after a transition period.
-   * It's mostly to help to ensure users don't get missing tokens
-   * or unexpected output after the 5.43 upgrade until any
-   * old templates have aged out.
-   *
-   * @param array $fields
-   *
-   * @return bool|string[]
-   */
-  public static function deprecatedTokensFormRule(array $fields) {
-    $deprecatedTokens = [
-      '{case.status_id}' => '{case.status_id:label}',
-      '{case.case_type_id}' => '{case.case_type_id:label}',
-      '{contribution.campaign}' => '{contribution.campaign_id:label}',
-      '{contribution.payment_instrument}' => '{contribution.payment_instrument_id:label}',
-      '{contribution.contribution_id}' => '{contribution.id}',
-      '{contribution.contribution_source}' => '{contribution.source}',
-      '{contribution.contribution_status}' => '{contribution.contribution_status_id:label}',
-      '{contribution.contribution_cancel_date}' => '{contribution.cancel_date}',
-      '{contribution.type}' => '{contribution.financial_type_id:label}',
-      '{contribution.contribution_page_id}' => '{contribution.contribution_page_id:label}',
-    ];
-    $tokenErrors = [];
-    foreach ($deprecatedTokens as $token => $replacement) {
-      if (strpos($fields['html_message'], $token) !== FALSE) {
-        $tokenErrors[] = ts('Token %1 is no longer supported - use %2 instead', [$token, $replacement]);
-      }
-    }
-    return empty($tokenErrors) ? TRUE : ['html_message' => implode('<br>', $tokenErrors)];
   }
 
 }
