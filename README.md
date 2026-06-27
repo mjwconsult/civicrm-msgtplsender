@@ -17,8 +17,8 @@ Where:
 * `tplprefix`: Filter the message templates that are shown (msg_title LIKE XX: ...). Also messagetemplates will be saved with this prefix if you save/update via the "Send Enail" form.
 * `destination`: A path internal to the site to redirect to after submit.
 
-## Release Notes
+## Support and Maintenance
 
-### 1.1 (2022-06-09)
+This extension is supported and maintained with the help and support of the CiviCRM community by [MJW](https://www.mjwconsult.co.uk).
 
-* Make form a frontend form.
+We offer paid [support and development](https://mjw.pt/support) as well as a [troubleshooting/investigation service](https://mjw.pt/investigation).

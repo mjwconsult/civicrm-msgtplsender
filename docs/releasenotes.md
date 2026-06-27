@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.4.0
+
+Compatibility with CiviCRM 6.14 security release.
+
 ## 1.2.1
 
 * Refactor and compatibility with CiviCRM 5.58.1

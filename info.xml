@@ -4,21 +4,24 @@
   <name>Message Template Sender</name>
   <description>Adds customised forms for sending emails using message templates</description>
   <license>AGPL-3.0</license>
-  <maintainer>
-    <author>Matthew Wire</author>
-    <email>mjw@mjwconsult.co.uk</email>
-  </maintainer>
+  <authors>
+    <author>
+      <name>MJW</name>
+      <email>info@mjwconsult.co.uk</email>
+      <role>Maintainer</role>
+    </author>
+  </authors>
   <urls>
     <url desc="Main Extension Page">https://github.com/mjwconsult/civicrm-msgtplsender</url>
     <url desc="Release Notes">https://github.com/mjwconsult/civicrm-msgtplsender/blob/master/docs/releasenotes.md</url>
     <url desc="Support">https://mjw.pt/support/msgtplsender</url>
     <url desc="Licensing">http://www.gnu.org/licenses/agpl-3.0.html</url>
   </urls>
-  <releaseDate>2025-04-24</releaseDate>
-  <version>1.3</version>
+  <releaseDate>2026-06-27</releaseDate>
+  <version>1.4.0</version>
   <develStage>stable</develStage>
   <compatibility>
-    <ver>6.1</ver>
+    <ver>6.14</ver>
   </compatibility>
   <classloader>
     <psr0 prefix="CRM_" path="."/>
@@ -26,7 +29,7 @@
   </classloader>
   <civix>
     <namespace>CRM/Msgtplsender</namespace>
-    <format>25.01.1</format>
+    <format>25.10.2</format>
   </civix>
   <mixins>
     <mixin>menu-xml@1.0.0</mixin>
